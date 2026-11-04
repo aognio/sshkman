@@ -1,0 +1,87 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sshkma-domain",
+    "crates/sshkma-events",
+    "crates/sshkma-crypto",
+    "crates/sshkma-sshconfig",
+    "crates/sshkma-config",
+    "crates/sshkma-vault",
+    "crates/sshkma-protocol",
+    "crates/sshkma-engine",
+    "crates/sshkma-storage",
+    "crates/sshkma-auth",
+    "crates/sshkma-server",
+    "crates/sshkma-client",
+    "apps/sshkma",
+    "apps/sshkmad",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Antonio Ognio <aognio@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aognio/sshkman"
+
+[workspace.dependencies]
+# Internal workspace crates
+sshkma-domain = { path = "crates/sshkma-domain" }
+sshkma-events = { path = "crates/sshkma-events" }
+sshkma-crypto = { path = "crates/sshkma-crypto" }
+sshkma-sshconfig = { path = "crates/sshkma-sshconfig" }
+sshkma-config = { path = "crates/sshkma-config" }
+sshkma-vault = { path = "crates/sshkma-vault" }
+sshkma-protocol = { path = "crates/sshkma-protocol" }
+sshkma-engine = { path = "crates/sshkma-engine" }
+sshkma-storage = { path = "crates/sshkma-storage" }
+sshkma-auth = { path = "crates/sshkma-auth" }
+sshkma-server = { path = "crates/sshkma-server" }
+sshkma-client = { path = "crates/sshkma-client" }
+
+# Sans-I/O
+sansio = "1.0.1"
+
+# Serialization & Configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Cryptography & Security
+argon2 = { version = "0.6.0", features = ["password-hash", "zeroize"] }
+chacha20poly1305 = { version = "0.11.0", features = ["alloc", "zeroize"] }
+hkdf = "0.13.0"
+sha2 = "0.10.9"
+secrecy = { version = "0.10.3", features = ["serde"] }
+zeroize = { version = "1.9.1", features = ["derive"] }
+rand = "0.8.8"
+rand_core = { version = "0.6.4", features = ["std"] }
+hex = "0.4"
+base64 = "0.22"
+
+# OpenSSH Key & Config Parsing
+ssh-key = { version = "0.6.7", features = ["ed25519", "rsa", "p256", "encryption", "std"] }
+ssh2-config = "0.9.0"
+
+# CLI & OS Integration
+clap = { version = "4.6", features = ["derive", "env"] }
+dirs = "6.0"
+keyring = { version = "4.2.0" }
+fs4 = { version = "1.1.0", features = ["sync"] }
+
+# Async & HTTP Network
+tokio = { version = "1.40", features = ["full"] }
+axum = { version = "0.8.0", features = ["tokio", "json"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# Logging & Diagnostics
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Error Handling & Utilities
+thiserror = "2.0"
+uuid = { version = "1.15", features = ["v4", "serde"] }
+
+# Testing
+tempfile = "3.17"
+proptest = "1.6"

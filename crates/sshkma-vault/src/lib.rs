@@ -1,0 +1,1 @@
+//! sshkma-vault crate

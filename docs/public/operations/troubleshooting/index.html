@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Troubleshooting</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Troubleshooting</h1>
+  <h1 id="troubleshooting">Troubleshooting</h1>
+<h2 id="config-check-fails">Config check fails</h2>
+<p>Run <code>sshkmad config check</code>. Ensure <code>public_url</code> is set and <code>storage.root</code> exists or can be created.</p>
+<h2 id="client-cannot-unlock">Client cannot unlock</h2>
+<p>Confirm the vault password and user ID. The server cannot recover a vault password. Use the recovery key if the password is lost.</p>
+<h2 id="openssh-does-not-use-the-managed-key">OpenSSH does not use the managed key</h2>
+<p>Run <code>ssh -G &lt;alias&gt;</code> and check <code>identityfile</code>. Ensure <code>~/.ssh/config</code> contains the managed include block and that the alias file exists under <code>~/.ssh/managed</code>.</p>
+
+
+  </main>
+</body>
+</html>

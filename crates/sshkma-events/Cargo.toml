@@ -7,3 +7,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+sshkma-domain = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+secrecy = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+proptest = { workspace = true }

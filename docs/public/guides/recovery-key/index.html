@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Use a recovery key</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Use a recovery key</h1>
+  <h1 id="use-a-recovery-key">Use a recovery key</h1>
+<p>The recovery key is generated locally when the vault is created. Store it offline. It provides an independent wrapping of the vault master key.</p>
+<p>To recover access after losing the vault password:</p>
+<ol>
+<li>Obtain the wrapped vault key from the server.</li>
+<li>Run the recovery flow with the recovery key.</li>
+<li>Set a new vault password and rewrap the vault master key.</li>
+</ol>
+<p>The server never learns the recovery key or the vault master key. Keep the recovery key secret; anyone who has it can unwrap the vault master key.</p>
+
+
+  </main>
+</body>
+</html>

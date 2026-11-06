@@ -1,0 +1,9 @@
+base_url = "https://aognio.github.io/sshkman"
+title = "sshkman"
+description = "Long-form manuals and guides for sshkman and sshkmad."
+default_language = "en"
+build_search_index = true
+compile_sass = true
+minify_html = false
+
+[markdown]

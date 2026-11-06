@@ -57,8 +57,10 @@ Targeted Crates:
 ---
 
 ## Gate F: E2E and Hardening
-*Status: PENDING*
+*Status: IN PROGRESS*
 
-- Multi-device sync E2E scenario.
-- Property-based tests (`proptest`).
-- Operational guides and final verification.
+- [x] Multi-device sync E2E scenario (tests/e2e.rs).
+- [x] Server HTTP API vertical slice.
+- [x] Client adapter vertical slice.
+- [x] Property-based tests (`proptest`) for crypto envelopes, logfmt escaping, OpenSSH config preservation, TOML roundtrip, and vault records.
+- [x] Operational and user documentation.

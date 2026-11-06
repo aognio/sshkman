@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remove an installed identity</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Remove an installed identity</h1>
+  <h1 id="remove-an-installed-identity">Remove an installed identity</h1>
+<p>Local removal and remote removal are different operations.</p>
+<ul>
+<li><code>sshkma remove &lt;slug&gt;</code> removes local managed files only. It does not revoke remote access.</li>
+<li><code>sshkma keys remove &lt;slug&gt; --remote</code> deletes the encrypted identity from the server vault.</li>
+</ul>
+<p>To remove an identity completely:</p>
+<ol>
+<li>Run <code>sshkma remove &lt;slug&gt;</code> on every client that installed it.</li>
+<li>Run <code>sshkma keys remove &lt;slug&gt; --remote</code> once.</li>
+<li>Remove the public key from any remote SSH server <code>authorized_keys</code> files where it was authorized.</li>
+</ol>
+<p>Removing a vault identity does not remove SSH authorization on remote servers.</p>
+
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run behind a reverse proxy</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Run behind a reverse proxy</h1>
+  <h1 id="run-behind-a-reverse-proxy">Run behind a reverse proxy</h1>
+<p>Run <code>sshkmad</code> on a loopback address and terminate TLS in a reverse proxy.</p>
+<pre><code data-lang="toml">[server]
+listen_address = &quot;127.0.0.1&quot;
+port = 8080
+public_url = &quot;https://vault.example.com&quot;
+</code></pre>
+<p>Set <code>require_https = true</code> in production. Configure the proxy to forward to the loopback listener. Do not trust arbitrary forwarded headers unless the proxy is explicitly trusted.</p>
+
+
+  </main>
+</body>
+</html>

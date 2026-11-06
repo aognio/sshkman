@@ -1,35 +1,141 @@
 # sshkma & sshkmad
 
-A production-minded, self-hosted, zero-knowledge SSH identity vault and OpenSSH provisioning system in Rust.
+A self-hosted, zero-knowledge SSH identity vault and OpenSSH provisioning system in Rust.
 
-## Architecture
+`sshkma` is the client CLI. `sshkmad` is the server daemon and administrative CLI. Persistence is filesystem-only (no SQLite), and the server never receives plaintext SSH private keys, vault passwords, unwrapped VMKs, or plaintext identity records.
 
-- `sshkma`: Cross-platform client CLI for authentication, vault unlocking, importing original SSH public/private key pairs, listing, installing, editing, updating, and removing locally managed OpenSSH identities.
-- `sshkmad`: Single server executable with `serve` and administrative CLI subcommands, backed entirely by a file-based store (`/var/lib/sshkmad`).
+## Quick Start
 
-### Key Invariants
-- **Zero Knowledge**: The server never receives raw SSH private keys, plaintext vault passwords, unwrapped vault master keys, or plaintext identity records over the network.
-- **Key Preservation**: Verbatim byte preservation of original private keys and `.pub` keys (including comments and formatting).
-- **Filesystem-Only**: No SQLite or SQL databases; atomic file updates with fsync and cross-platform advisory locking (`fs4`).
-- **OpenSSH Compatibility**: Non-destructive integration via managed include directives (`Include ~/.ssh/managed/*.conf`).
-- **Logfmt Structured Logging**: Operational and security logs in key=value logfmt format with mandatory secret redaction.
-
-## Building & Verification
+### Server
 
 ```bash
-# Check formatting
-make fmt
+sshkmad init
+sshkmad config check
+sshkmad users add --username alice --password 'change-me'
+sshkmad serve
+```
 
-# Strict clippy linting
-make lint
+Default config path: `/etc/sshkma/sshkmad.toml`. Override with `--config PATH`.
 
-# Run all tests
-make test
+Example server config:
+
+```toml
+[server]
+hostname = "vault.example.com"
+listen_address = "127.0.0.1"
+port = 8080
+public_url = "https://vault.example.com"
+
+[storage]
+root = "/var/lib/sshkmad"
+
+[auth]
+access_ttl = "15m"
+refresh_ttl = "720h"
+secret_file = "/etc/sshkma/secrets/session.key"
+
+[logging]
+level = "info"
+format = "logfmt"
+file = "/var/log/sshkmad/sshkmad.log"
+security_file = "/var/log/sshkmad/security.log"
+rotation = "daily"
+retention_days = 30
+
+[security]
+require_https = true
+max_login_attempts = 5
+```
+
+### Client
+
+Default client config: `${XDG_CONFIG_HOME:-$HOME/.config}/sshkma/config.toml`.
+
+```bash
+sshkma login https://vault.example.com --username alice
+sshkma unlock
+sshkma keys add prod --private ~/.ssh/id_ed25519 --public ~/.ssh/id_ed25519.pub --host prod --hostname 10.0.0.1 --user ubuntu --port 22
+sshkma install prod
+sshkma sync
+sshkma logout
+```
+
+Client config example:
+
+```toml
+version = 1
+
+[vault]
+url = "https://vault.example.com"
+username = "alice"
+
+[auth]
+storage = "keyring" # or explicitly opted-in "toml"
+
+[ssh]
+config_dir = "~/.ssh"
+managed_dir = "~/.ssh/managed"
+keys_dir = "~/.ssh/keys"
+```
+
+## OpenSSH Integration
+
+sshkma never rewrites arbitrary `~/.ssh/config` blocks. It inserts one managed include block:
+
+```text
+# BEGIN SSHKMA MANAGED INCLUDES
+Include ~/.ssh/managed/*.conf
+# END SSHKMA MANAGED INCLUDES
+```
+
+Each identity gets `~/.ssh/managed/<slug>.conf` and key material under `~/.ssh/keys/<slug>`.
+
+## Administration
+
+```bash
+sshkmad users list
+sshkmad users disable alice
+sshkmad devices list
+sshkmad devices revoke <device-id>
+sshkmad sessions list
+sshkmad sessions revoke <session-id>
+sshkmad keys list
+sshkmad keys import <identity-id> --file envelope.enc --user <user-id>
+sshkmad stats
+sshkmad doctor
+```
+
+`keys import` accepts only already-encrypted, authenticated envelope data.
+
+## Bulk Import from SSH Config
+
+Import every concrete `Host` entry in `~/.ssh/config` that has an `IdentityFile` with a matching `.pub`:
+
+```bash
+sshkma keys bulk-import --dry-run
+sshkma keys bulk-import --glob 'prod-*' --dry-run
+sshkma keys bulk-import --glob 'web-?' --yes
+```
+
+`--glob` uses shell-style matching (`*` any sequence, `?` single char, case-sensitive). A summary is printed before importing; confirm with `y` or pass `--yes`.
+
+## Vault Environment Variables
+
+- `SSHKMA_PASSWORD`: account password for noninteractive login.
+- `SSHKMA_VAULT_PASSWORD`: vault master password.
+- `SSHKMA_USER_ID`: opaque user ID for vault operations.
+
+## Development
+
+```bash
+make help
+make check
+make e2e
 ```
 
 ## Documentation
 
-- [Architecture Decision Records (MADRs)](docs/adr/README.md)
+- [Architecture Decision Records](docs/adr/README.md)
 - [Threat Model](docs/security/threat-model.md)
-- [Dependency Research & APIs](docs/research.md)
+- [Dependency Research](docs/research.md)
 - [Agent Guidelines](AGENTS.md)

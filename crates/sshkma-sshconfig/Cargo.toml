@@ -7,3 +7,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+sshkma-domain = { workspace = true }
+ssh-key = { workspace = true }
+ssh2-config = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
+proptest = { workspace = true }

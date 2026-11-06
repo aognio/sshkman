@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client commands</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Client commands</h1>
+  <h1 id="client-commands">Client commands</h1>
+<pre><code data-lang="text">sshkma login &lt;url&gt; [--username &lt;name&gt;]
+sshkma logout [--all-devices]
+sshkma unlock
+sshkma lock
+sshkma status
+sshkma list
+sshkma keys add &lt;slug&gt; --private &lt;path&gt; --public &lt;path&gt; [--host &lt;alias&gt;] [--hostname &lt;name&gt;] [--user &lt;name&gt;] [--port &lt;port&gt;]
+sshkma keys show &lt;slug&gt;
+sshkma keys remove &lt;slug&gt; [--remote]
+sshkma install &lt;slug&gt; [--dry-run]
+sshkma remove &lt;slug&gt; [--dry-run]
+sshkma sync [--dry-run]
+sshkma config show
+sshkma config check
+sshkma doctor
+sshkma version
+</code></pre>
+<p><code>keys remove</code> deletes from the server vault only with <code>--remote</code>. <code>remove</code> uninstalls local managed files only.</p>
+
+
+  </main>
+</body>
+</html>

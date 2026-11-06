@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Client configuration</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Client configuration</h1>
+  <h1 id="client-configuration">Client configuration</h1>
+<p>Default path: <code>${XDG_CONFIG_HOME:-$HOME/.config}/sshkma/config.toml</code>.</p>
+<pre><code data-lang="toml">version = 1
+
+[vault]
+url = &quot;https://vault.example.com&quot;
+username = &quot;example&quot;
+
+[auth]
+storage = &quot;keyring&quot; # or explicitly opted-in &quot;toml&quot;
+
+[ssh]
+config_dir = &quot;~/.ssh&quot;
+managed_dir = &quot;~/.ssh/managed&quot;
+keys_dir = &quot;~/.ssh/keys&quot;
+</code></pre>
+<p><code>storage = "toml"</code> stores a revocable credential in the config directory with restrictive permissions. It never stores a raw vault password or vault master key.</p>
+
+
+  </main>
+</body>
+</html>

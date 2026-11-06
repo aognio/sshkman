@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synchronize a second client</title>
+  <link rel="stylesheet" href="https://aognio.github.io/sshkman/style.css">
+</head>
+<body>
+  <nav>
+    <a href="https://aognio.github.io/sshkman">Home</a>
+    <a href="https://aognio.github.io/sshkman/getting-started">Getting started</a>
+    <a href="https://aognio.github.io/sshkman/concepts">Concepts</a>
+    <a href="https://aognio.github.io/sshkman/guides">Guides</a>
+    <a href="https://aognio.github.io/sshkman/reference">Reference</a>
+    <a href="https://aognio.github.io/sshkman/operations">Operations</a>
+    <a href="https://docs.rs/sshkman">API reference (docs.rs)</a>
+  </nav>
+  <main>
+    
+  <h1>Synchronize a second client</h1>
+  <h1 id="synchronize-a-second-client">Synchronize a second client</h1>
+<p>Use this guide when you have imported a key on one machine and want to install it on another.</p>
+<ol>
+<li>Log in on the second machine with the same account.</li>
+<li>Unlock the vault with the same vault password.</li>
+<li>Run <code>sshkma sync</code>.</li>
+<li>Verify with <code>ssh -G &lt;alias&gt;</code>.</li>
+</ol>
+<p><code>sync</code> fetches every encrypted identity record, decrypts it locally, and applies the installation plan. It does not upload or change server state.</p>
+<p>If a managed file was modified locally, review the diff before overwriting it. sshkma does not delete unknown files automatically.</p>
+
+
+  </main>
+</body>
+</html>

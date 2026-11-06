@@ -35,3 +35,47 @@ fn symlink_rejected() {
         assert!(safe_join(dir.path(), "link/secret").is_err());
     }
 }
+
+use sshkma_storage::{safe_path, AdvisoryLock};
+
+#[test]
+fn safe_join_rejects_traversal() {
+    let root = std::path::PathBuf::from("/tmp/scratchpad/root");
+    assert!(safe_join(&root, "../evil").is_err());
+    assert!(safe_join(&root, "a/../b").is_err());
+    assert!(safe_join(&root, "/abs").is_err());
+    let ok = safe_join(&root, "a/b.txt").unwrap();
+    assert_eq!(ok, root.join("a/b.txt"));
+}
+
+#[test]
+fn filestore_roundtrip() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = FileStore::new(tmp.path().to_path_buf());
+    store.write("sub/file.txt", b"hello").unwrap();
+    assert!(store.exists("sub/file.txt"));
+    assert_eq!(store.read("sub/file.txt").unwrap(), b"hello");
+    assert!(!store.exists("nope.txt"));
+}
+
+#[test]
+fn advisory_lock_acquire_release() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let lockpath = tmp.path().join("lock");
+    let lock = AdvisoryLock::acquire(&lockpath).unwrap();
+    lock.release().unwrap();
+}
+
+#[test]
+fn is_symlink_false_for_regular() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let p = tmp.path().join("f");
+    std::fs::write(&p, b"x").unwrap();
+    assert!(!sshkma_storage::is_symlink(&p));
+}
+
+#[test]
+fn safe_path_alias() {
+    let root = std::path::PathBuf::from("/r");
+    assert_eq!(safe_path(&root, "a").unwrap(), root.join("a"));
+}

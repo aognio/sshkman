@@ -125,6 +125,27 @@ sshkma keys bulk-import --glob 'web-?' --yes
 - `SSHKMA_VAULT_PASSWORD`: vault master password.
 - `SSHKMA_USER_ID`: opaque user ID for vault operations.
 
+## Test Coverage
+
+Measured with `cargo llvm-cov --workspace` (latest run):
+
+| Crate | Line coverage |
+|---|---|
+| sshkma-auth | 92% |
+| sshkma-config | 72% |
+| sshkma-crypto | 61% |
+| sshkma-domain | 68% |
+| sshkma-engine | 100% |
+| sshkma-events | 30% |
+| sshkma-protocol | 84% |
+| sshkma-server | 62% |
+| sshkma-sshconfig | 97% |
+| sshkma-storage | 82% |
+| sshkma-vault | 88% |
+| sshkma-client | 34% |
+| apps/* | 0% (CLI glue, exercised via E2E/manual) |
+| **Total** | **~30%** |
+
 ## Development
 
 ```bash

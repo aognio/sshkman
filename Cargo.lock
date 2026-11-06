@@ -806,9 +806,24 @@ dependencies = [
  "cpufeatures 0.2.17",
  "curve25519-dalek-derive",
  "digest 0.10.7",
- "fiat-crypto",
+ "fiat-crypto 0.2.9",
  "rustc_version",
  "subtle",
+]
+
+[[package]]
+name = "curve25519-dalek"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5eed333089e2e1c1ac8c6c0398e5e2497b4c9926ca6d0365ed1e099afa5bc23"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "curve25519-dalek-derive",
+ "fiat-crypto 0.3.0",
+ "rustc_version",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -926,7 +941,7 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
- "curve25519-dalek",
+ "curve25519-dalek 4.1.3",
  "ed25519",
  "sha2 0.10.9",
  "subtle",
@@ -1049,6 +1064,12 @@ name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-msvc-tools"
@@ -2898,6 +2919,7 @@ dependencies = [
  "sshkma-sshconfig",
  "sshkma-storage",
  "sshkma-vault",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",
@@ -2932,6 +2954,7 @@ dependencies = [
  "sha2 0.10.9",
  "sshkma-domain",
  "thiserror",
+ "x25519-dalek",
  "zeroize",
 ]
 
@@ -2951,6 +2974,8 @@ dependencies = [
 name = "sshkma-engine"
 version = "0.1.0"
 dependencies = [
+ "secrecy",
+ "serde_json",
  "sshkma-domain",
  "sshkma-events",
  "sshkma-protocol",
@@ -2990,6 +3015,8 @@ dependencies = [
  "base64 0.22.1",
  "hex",
  "proptest",
+ "rand 0.8.8",
+ "reqwest",
  "secrecy",
  "serde",
  "serde_json",
@@ -2999,6 +3026,7 @@ dependencies = [
  "sshkma-domain",
  "sshkma-storage",
  "sshkma-vault",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",
@@ -3866,6 +3894,17 @@ name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
+
+[[package]]
+name = "x25519-dalek"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e8131a03190127fb2263afc72b322ecadae46b6ff8c6f399ff5d02f5559af6"
+dependencies = [
+ "curve25519-dalek 5.0.0",
+ "rand_core 0.10.1",
+ "zeroize",
+]
 
 [[package]]
 name = "yoke"

@@ -6,7 +6,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "sshkmad", version, about = "sshkma server daemon")]
+#[command(
+    name = "sshkmad",
+    version,
+    about = "sshkmad server daemon and admin CLI",
+    long_about = "sshkmad is the server daemon and administrative CLI for a self-hosted, zero-knowledge SSH identity vault.\n\nIt stores only encrypted vault content and opaque identifiers on the filesystem.",
+    after_help = "Examples:\n  sshkmad init --config /etc/sshkma/sshkmad.toml\n  sshkmad config check\n  sshkmad users add --username alice --password 'change-me'\n  sshkmad serve\n  sshkmad overview\n  sshkmad invites create --ttl 3600\n\nEnvironment/paths:\n  Default config: /etc/sshkma/sshkmad.toml (override with --config)\n  Storage root: /var/lib/sshkmad"
+)]
 struct Cli {
     #[arg(long, default_value = "/etc/sshkma/sshkmad.toml")]
     config: PathBuf,
@@ -27,6 +33,10 @@ enum Commands {
         #[command(subcommand)]
         action: UsersAction,
     },
+    Invites {
+        #[command(subcommand)]
+        action: InvitesAction,
+    },
     Devices {
         #[command(subcommand)]
         action: DevicesAction,
@@ -41,6 +51,7 @@ enum Commands {
     },
     Stats,
     Doctor,
+    Overview,
     Version,
 }
 
@@ -60,6 +71,20 @@ enum UsersAction {
     List,
     Disable {
         username: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum InvitesAction {
+    Create {
+        #[arg(long, default_value = "3600")]
+        ttl: u64,
+        #[arg(long)]
+        role: Option<String>,
+    },
+    List,
+    Revoke {
+        code: String,
     },
 }
 
@@ -104,6 +129,10 @@ struct AccountRecord {
     password_hash: String,
     #[serde(default)]
     disabled: bool,
+    #[serde(default)]
+    role: String,
+    #[serde(default)]
+    grant_public_key: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -249,6 +278,66 @@ async fn main() {
                         }
                     } else {
                         eprintln!("user not found");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+        Commands::Invites { action } => {
+            let cfg = load_cfg(&cli.config);
+            let root = root_of(&cfg);
+            match action {
+                InvitesAction::Create { ttl, role } => {
+                    let r = match role.as_deref() {
+                        Some("admin") => sshkma_server::Role::Admin,
+                        _ => sshkma_server::Role::Reader,
+                    };
+                    match sshkma_server::create_invite(&root, "admin", ttl, r) {
+                        Ok(inv) => {
+                            let base = cfg.server.public_url.trim_end_matches('/').to_string();
+                            print!(
+                                "{}",
+                                sshkma_config::render_invite_text(&base, &inv.code, inv.expires_at)
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                InvitesAction::List => {
+                    let dir = root.join("invites");
+                    if dir.exists() {
+                        for entry in fs::read_dir(&dir).unwrap() {
+                            let entry = entry.unwrap();
+                            let path = entry.path();
+                            if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                                if let Ok(s) = fs::read_to_string(&path) {
+                                    if let Ok(inv) =
+                                        toml::from_str::<sshkma_server::InviteRecord>(&s)
+                                    {
+                                        println!(
+                                            "{} expires={} used={}",
+                                            inv.code,
+                                            inv.expires_at,
+                                            inv.used_by.as_deref().unwrap_or("-")
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                InvitesAction::Revoke { code } => {
+                    let path = root
+                        .join("invites")
+                        .join(format!("{}.toml", code.replace('-', "")));
+                    if path.exists() {
+                        let _ = fs::remove_file(&path);
+                        println!("revoked {}", code);
+                    } else {
+                        eprintln!("not found");
                         std::process::exit(1);
                     }
                 }
@@ -448,6 +537,52 @@ async fn main() {
             println!("config: {}", cli.config.display());
             println!("storage_root: {} exists={}", root.display(), root.exists());
             println!("doctor: ok");
+        }
+        Commands::Overview => {
+            let cfg = load_cfg(&cli.config);
+            let root = root_of(&cfg);
+            println!("Users:");
+            let idx = load_index(&root);
+            for (name, uid) in &idx {
+                let ap = root.join("users").join(uid).join("account.toml");
+                let (disabled, role) = fs::read_to_string(&ap)
+                    .ok()
+                    .and_then(|s| toml::from_str::<AccountRecord>(&s).ok())
+                    .map(|a| (a.disabled, a.role))
+                    .unwrap_or((false, String::new()));
+                println!("  {} {} disabled={} role={}", name, uid, disabled, role);
+            }
+            println!("Pending invites:");
+            let dir = root.join("invites");
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            if dir.exists() {
+                for entry in fs::read_dir(&dir).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                        if let Ok(s) = fs::read_to_string(&path) {
+                            if let Ok(inv) = toml::from_str::<sshkma_server::InviteRecord>(&s) {
+                                let status = if inv.used_by.is_some() {
+                                    "used"
+                                } else if now > inv.expires_at {
+                                    "expired"
+                                } else {
+                                    "pending"
+                                };
+                                if status == "pending" {
+                                    println!(
+                                        "  {} expires={} role={}",
+                                        inv.code, inv.expires_at, inv.role
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         Commands::Version => println!("{}", env!("CARGO_PKG_VERSION")),
     }

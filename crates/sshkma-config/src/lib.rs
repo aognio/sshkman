@@ -383,3 +383,12 @@ pub fn default_client_config_path() -> Option<PathBuf> {
 pub fn default_server_config_path() -> PathBuf {
     PathBuf::from("/etc/sshkma/sshkmad.toml")
 }
+
+pub fn render_invite_text(base_url: &str, code: &str, expires_at: u64) -> String {
+    let base = base_url.trim_end_matches('/');
+    let url = format!("{}/invites/{}", base, code);
+    format!(
+        "Join my SSH vault network\n\nVault URL: {}\nInvite code: {}\nInvite link: {}\nExpires at (unix): {}\n\nTo join, run:\n  sshkma register {}\n",
+        base, code, url, expires_at, url
+    )
+}

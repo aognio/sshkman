@@ -15,7 +15,13 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "sshkma", version, about = "sshkma client")]
+#[command(
+    name = "sshkma",
+    version,
+    about = "sshkma client: zero-knowledge SSH identity vault",
+    long_about = "sshkma is the client CLI for a self-hosted, zero-knowledge SSH identity vault.\n\nIt authenticates to sshkmad, unlocks a client-side vault, imports SSH keypairs, and installs them into OpenSSH using managed include blocks.",
+    after_help = "Examples:\n  sshkma login https://vault.example.com --username alice\n  sshkma unlock\n  sshkma keys add prod --private ~/.ssh/id_ed25519 --public ~/.ssh/id_ed25519.pub --host prod --hostname 10.0.0.1 --user ubuntu --port 22\n  sshkma keys bulk-import --glob 'prod-*' --dry-run\n  sshkma install prod\n  sshkma sync\n  sshkma logout\n\nEnvironment:\n  SSHKMA_PASSWORD            account password for noninteractive login\n  SSHKMA_VAULT_PASSWORD     vault master password\n  SSHKMA_USER_ID            opaque user id for vault operations\n  SSHKMA_GRANT_ID           grant id for shared-vault unlock\n  XDG_CONFIG_HOME           client configuration directory root"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -59,6 +65,30 @@ enum Commands {
         action: ConfigAction,
     },
     Doctor,
+    Register {
+        invite_code: String,
+        #[arg(long)]
+        username: Option<String>,
+    },
+    InviteCreate {
+        #[arg(long, default_value = "3600")]
+        ttl: u64,
+        #[arg(long)]
+        role: Option<String>,
+    },
+    InviteList,
+    InviteRevoke {
+        code: String,
+    },
+    GrantKeygen,
+    Grants {
+        #[command(subcommand)]
+        action: GrantsAction,
+    },
+    Admin {
+        #[command(subcommand)]
+        action: AdminAction,
+    },
     Version,
 }
 
@@ -109,6 +139,26 @@ enum KeysAction {
         #[arg(long)]
         remote: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum GrantsAction {
+    Register,
+    Create {
+        grantee: String,
+        #[arg(long)]
+        expires: Option<u64>,
+    },
+    List,
+    Revoke {
+        id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum AdminAction {
+    Users,
+    Overview,
 }
 
 #[derive(Subcommand)]
@@ -242,6 +292,258 @@ fn make_client(cfg: &ClientConfig, ts: &TokenStore) -> VaultClient {
 async fn main() {
     let cli = Cli::parse();
     match cli.command {
+        Commands::GrantKeygen => {
+            use sshkma_crypto::generate_grant_keypair;
+            let (privk, pubk) = generate_grant_keypair();
+            let base = config_path()
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+            let _ = fs::create_dir_all(&base);
+            let keyfile = base.join("grant_key.toml");
+            let content = format!(
+                "private = \"{}\"\npublic = \"{}\"\n",
+                hex::encode(*privk),
+                hex::encode(pubk)
+            );
+            let _ = fs::write(&keyfile, content);
+            println!("public_key={}", hex::encode(pubk));
+            println!("private_key_saved={}", keyfile.display());
+        }
+        Commands::Grants { action } => match action {
+            GrantsAction::Register => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                let base = config_path()
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .to_path_buf();
+                let content = fs::read_to_string(base.join("grant_key.toml")).unwrap_or_default();
+                let pubhex = content
+                    .lines()
+                    .find_map(|l| l.strip_prefix("public = "))
+                    .map(|s| s.trim().trim_matches('"').to_string())
+                    .unwrap_or_default();
+                if pubhex.is_empty() {
+                    eprintln!("run grant-keygen first");
+                    std::process::exit(1);
+                }
+                if client.set_grant_key(&pubhex).await.is_err() {
+                    eprintln!("register failed");
+                    std::process::exit(1);
+                }
+                println!("registered grant public key");
+            }
+            GrantsAction::Create { grantee, expires } => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                let password = prompt_secret("SSHKMA_VAULT_PASSWORD", "Vault password: ");
+                let user_id_str = std::env::var("SSHKMA_USER_ID").unwrap_or_default();
+                let user_id = sshkma_domain::UserId::parse(&user_id_str).unwrap_or_else(|_| {
+                    eprintln!("set SSHKMA_USER_ID");
+                    std::process::exit(1);
+                });
+                // get grantee public key
+                let grantee_pub_hex = client.get_grant_key(&grantee).await.unwrap_or_default();
+                if grantee_pub_hex.is_empty() {
+                    eprintln!("grantee has no grant key registered");
+                    std::process::exit(1);
+                }
+                let bytes = hex::decode(&grantee_pub_hex).unwrap_or_default();
+                if bytes.len() != 32 {
+                    eprintln!("invalid grantee public key");
+                    std::process::exit(1);
+                }
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                let vmk = unlock_vmk(&client, &password, "")
+                    .await
+                    .unwrap_or_else(|e| {
+                        eprintln!("{}", e);
+                        std::process::exit(1);
+                    });
+                let wrapped =
+                    sshkma_crypto::wrap_vmk_to_recipient(&vmk, &arr).unwrap_or_else(|e| {
+                        eprintln!("{}", e);
+                        std::process::exit(1);
+                    });
+                let gid = client
+                    .create_grant(
+                        &grantee,
+                        vec!["read".into(), "install".into()],
+                        wrapped,
+                        Some(grantee_pub_hex),
+                        expires,
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        eprintln!("{}", e);
+                        std::process::exit(1);
+                    });
+                println!("created grant {}", gid);
+                let _ = user_id;
+            }
+            GrantsAction::List => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                let gs = client.list_grants().await.unwrap_or_else(|e| {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                });
+                for g in gs {
+                    println!(
+                        "{} grantor={} grantee={} revoked={}",
+                        g["grant_id"].as_str().unwrap_or(""),
+                        g["grantor_user_id"].as_str().unwrap_or(""),
+                        g["grantee_user_id"].as_str().unwrap_or(""),
+                        g["revoked"].as_bool().unwrap_or(false)
+                    );
+                }
+            }
+            GrantsAction::Revoke { id } => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                if client.revoke_grant(&id).await.is_err() {
+                    eprintln!("revoke failed");
+                    std::process::exit(1);
+                }
+                println!("revoked {}", id);
+            }
+        },
+        Commands::Register {
+            invite_code,
+            username,
+        } => {
+            let cfg = load_config();
+            let username = username.unwrap_or_else(|| prompt_line("Username: "));
+            let password = prompt_secret("SSHKMA_PASSWORD", "Password: ");
+            // Support full invite URL: https://host/invites/XXXX-XXXX
+            let (base_url, code) = if invite_code.contains("://") {
+                if let Some(idx) = invite_code.rfind("/invites/") {
+                    (
+                        invite_code[..idx].to_string(),
+                        invite_code[idx + "/invites/".len()..].to_string(),
+                    )
+                } else if let Some(idx) = invite_code.rfind('/') {
+                    (
+                        invite_code[..idx].to_string(),
+                        invite_code[idx + 1..].to_string(),
+                    )
+                } else {
+                    (invite_code.clone(), String::new())
+                }
+            } else {
+                (
+                    cfg.vault.url.clone().unwrap_or_default(),
+                    invite_code.clone(),
+                )
+            };
+            let client = VaultClient::new(base_url);
+            match client.register(&code, &username, &password).await {
+                Ok(uid) => {
+                    println!("registered {} ({})", username, uid);
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::InviteCreate { ttl, role } => {
+            let cfg = load_config();
+            let ts = load_tokens(&cfg);
+            let client = make_client(&cfg, &ts);
+            match client.create_invite(ttl, role).await {
+                Ok((code, exp)) => {
+                    let base = cfg.vault.url.clone().unwrap_or_default();
+                    print!("{}", sshkma_config::render_invite_text(&base, &code, exp));
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::InviteList => {
+            let cfg = load_config();
+            let ts = load_tokens(&cfg);
+            let client = make_client(&cfg, &ts);
+            let gs = client.list_invites().await.unwrap_or_default();
+            for g in gs {
+                println!(
+                    "{} expires={} used={}",
+                    g["code"].as_str().unwrap_or(""),
+                    g["expires_at"].as_u64().unwrap_or(0),
+                    g["used_by"].as_str().unwrap_or("-")
+                );
+            }
+        }
+        Commands::InviteRevoke { code } => {
+            let cfg = load_config();
+            let ts = load_tokens(&cfg);
+            let client = make_client(&cfg, &ts);
+            if client.revoke_invite(&code).await.is_err() {
+                eprintln!("revoke failed");
+                std::process::exit(1);
+            }
+            println!("revoked {}", code);
+        }
+        Commands::Admin { action } => match action {
+            AdminAction::Users => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                let us = client.admin_users_list().await.unwrap_or_else(|e| {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                });
+                for u in us {
+                    println!(
+                        "{} {} role={} disabled={}",
+                        u["username"].as_str().unwrap_or(""),
+                        u["user_id"].as_str().unwrap_or(""),
+                        u["role"].as_str().unwrap_or(""),
+                        u["disabled"].as_bool().unwrap_or(false)
+                    );
+                }
+            }
+            AdminAction::Overview => {
+                let cfg = load_config();
+                let ts = load_tokens(&cfg);
+                let client = make_client(&cfg, &ts);
+                let v = client.admin_overview().await.unwrap_or_else(|e| {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                });
+                println!("Users:");
+                if let Some(users) = v["users"].as_array() {
+                    for u in users {
+                        println!(
+                            "  {} {} role={} disabled={}",
+                            u["username"].as_str().unwrap_or(""),
+                            u["user_id"].as_str().unwrap_or(""),
+                            u["role"].as_str().unwrap_or(""),
+                            u["disabled"].as_bool().unwrap_or(false)
+                        );
+                    }
+                }
+                println!("Invites:");
+                if let Some(invites) = v["invites"].as_array() {
+                    for i in invites {
+                        println!(
+                            "  {} expires={} used={}",
+                            i["code"].as_str().unwrap_or(""),
+                            i["expires_at"].as_u64().unwrap_or(0),
+                            i["used_by"].as_str().unwrap_or("-")
+                        );
+                    }
+                }
+            }
+        },
         Commands::Version => println!("{}", env!("CARGO_PKG_VERSION")),
         Commands::Status => {
             let cfg = load_config();
@@ -1068,6 +1370,34 @@ async fn unlock_vmk(
     password: &str,
     _user: &str,
 ) -> Result<zeroize::Zeroizing<[u8; 32]>, String> {
+    if let Ok(grant_id) = std::env::var("SSHKMA_GRANT_ID") {
+        let base = config_path()
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .to_path_buf();
+        let keyfile = std::env::var("SSHKMA_GRANT_KEY")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| base.join("grant_key.toml"));
+        let content = fs::read_to_string(&keyfile).map_err(|e| e.to_string())?;
+        let privhex = content
+            .lines()
+            .find_map(|l| l.strip_prefix("private = "))
+            .map(|s| s.trim().trim_matches('"').to_string())
+            .ok_or("no private key".to_string())?;
+        let bytes = hex::decode(&privhex).map_err(|e| e.to_string())?;
+        if bytes.len() != 32 {
+            return Err("bad grant private key".into());
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        let wk = client
+            .get_grant_wrapped_key(&grant_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        let env: sshkma_crypto::GrantWrappedKeyEnvelope =
+            serde_json::from_value(wk["wrapped_key"].clone()).map_err(|e| e.to_string())?;
+        return sshkma_crypto::unwrap_vmk_from_grant(&env, &arr).map_err(|e| e.to_string());
+    }
     let wk = client.get_wrapped_key().await.map_err(|e| e.to_string())?;
     let wrapped_env: sshkma_crypto::WrappedKeyEnvelope =
         serde_json::from_value(wk["wrapped_key"].clone()).map_err(|e| e.to_string())?;

@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [dependencies]
 sshkma-domain = { workspace = true }
 sshkma-events = { workspace = true }

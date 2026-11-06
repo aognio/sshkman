@@ -2,7 +2,7 @@
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::{Deserialize, Serialize};
-use sshkma_crypto::WrappedKeyEnvelope;
+use sshkma_crypto::{GrantWrappedKeyEnvelope, WrappedKeyEnvelope};
 
 #[derive(Debug, Clone)]
 pub struct ClientError(pub String);
@@ -271,10 +271,259 @@ impl VaultClient {
         }
         Ok(())
     }
+    pub async fn set_grant_key(&self, public_key: &str) -> Result<()> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let body = serde_json::json!({"public_key": public_key});
+        let resp = self
+            .http
+            .put(self.url("/api/v1/account/grant-key"))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() && resp.status() != reqwest::StatusCode::NO_CONTENT {
+            return Err(ClientError(format!(
+                "set_grant_key failed: {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
+    pub async fn get_grant_key(&self, username: &str) -> Result<String> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url(&format!("/api/v1/users/{}/grant-key", username)))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "get_grant_key failed: {}",
+                resp.status()
+            )));
+        }
+        let v: serde_json::Value = resp.json().await.map_err(|e| ClientError(e.to_string()))?;
+        Ok(v["public_key"].as_str().unwrap_or("").to_string())
+    }
+
+    pub async fn create_grant(
+        &self,
+        grantee_username: &str,
+        permissions: Vec<String>,
+        wrapped_key: GrantWrappedKeyEnvelope,
+        grantee_public_key: Option<String>,
+        expires_at: Option<u64>,
+    ) -> Result<String> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let body = serde_json::json!({
+            "grantee_username": grantee_username,
+            "permissions": permissions,
+            "wrapped_key": wrapped_key,
+            "grantee_public_key": grantee_public_key,
+            "expires_at": expires_at,
+        });
+        let resp = self
+            .http
+            .post(self.url("/api/v1/grants"))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "create_grant failed: {}",
+                resp.status()
+            )));
+        }
+        let v: serde_json::Value = resp.json().await.map_err(|e| ClientError(e.to_string()))?;
+        Ok(v["grant_id"].as_str().unwrap_or("").to_string())
+    }
+
+    pub async fn list_grants(&self) -> Result<Vec<serde_json::Value>> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url("/api/v1/grants"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "list_grants failed: {}",
+                resp.status()
+            )));
+        }
+        resp.json().await.map_err(|e| ClientError(e.to_string()))
+    }
+
+    pub async fn revoke_grant(&self, grant_id: &str) -> Result<()> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .delete(self.url(&format!("/api/v1/grants/{}", grant_id)))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() && resp.status() != reqwest::StatusCode::NO_CONTENT {
+            return Err(ClientError(format!(
+                "revoke_grant failed: {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+
+    pub async fn get_grant_wrapped_key(&self, grant_id: &str) -> Result<serde_json::Value> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url(&format!("/api/v1/grants/{}/wrapped-key", grant_id)))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "get_grant_wrapped_key failed: {}",
+                resp.status()
+            )));
+        }
+        resp.json().await.map_err(|e| ClientError(e.to_string()))
+    }
+    pub async fn register(
+        &self,
+        invite_code: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<String> {
+        let body = serde_json::json!({
+            "invite_code": invite_code,
+            "username": username,
+            "password": password,
+        });
+        let resp = self
+            .http
+            .post(self.url("/api/v1/auth/register"))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!("register failed: {}", resp.status())));
+        }
+        let v: serde_json::Value = resp.json().await.map_err(|e| ClientError(e.to_string()))?;
+        Ok(v["user_id"].as_str().unwrap_or("").to_string())
+    }
+
+    pub async fn create_invite(
+        &self,
+        ttl_secs: u64,
+        role: Option<String>,
+    ) -> Result<(String, u64)> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let body = serde_json::json!({"ttl_secs": ttl_secs, "role": role});
+        let resp = self
+            .http
+            .post(self.url("/api/v1/invites"))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "create_invite failed: {}",
+                resp.status()
+            )));
+        }
+        let v: serde_json::Value = resp.json().await.map_err(|e| ClientError(e.to_string()))?;
+        Ok((
+            v["code"].as_str().unwrap_or("").to_string(),
+            v["expires_at"].as_u64().unwrap_or(0),
+        ))
+    }
+
+    pub async fn list_invites(&self) -> Result<Vec<serde_json::Value>> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url("/api/v1/invites"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "list_invites failed: {}",
+                resp.status()
+            )));
+        }
+        resp.json().await.map_err(|e| ClientError(e.to_string()))
+    }
+
+    pub async fn revoke_invite(&self, code: &str) -> Result<()> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .delete(self.url(&format!("/api/v1/invites/{}", code.replace('-', ""))))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() && resp.status() != reqwest::StatusCode::NO_CONTENT {
+            return Err(ClientError(format!(
+                "revoke_invite failed: {}",
+                resp.status()
+            )));
+        }
+        Ok(())
+    }
+    pub async fn admin_users_list(&self) -> Result<Vec<serde_json::Value>> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url("/api/v1/admin/users"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "admin_users_list failed: {}",
+                resp.status()
+            )));
+        }
+        resp.json().await.map_err(|e| ClientError(e.to_string()))
+    }
+
+    pub async fn admin_overview(&self) -> Result<serde_json::Value> {
+        let token = self.access_token.clone().unwrap_or_default();
+        let resp = self
+            .http
+            .get(self.url("/api/v1/admin/overview"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ClientError(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(ClientError(format!(
+                "admin_overview failed: {}",
+                resp.status()
+            )));
+        }
+        resp.json().await.map_err(|e| ClientError(e.to_string()))
+    }
 }
 
 // Token storage helpers (TOML fallback)
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 pub struct TokenStore {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,

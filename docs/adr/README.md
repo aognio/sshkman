@@ -18,3 +18,4 @@ We use [MADR (Markdown Architectural Decision Records)](https://adr.github.io/ma
 | [ADR-0010](0010-openssh-managed-include-strategy.md) | OpenSSH Managed Include Strategy and File Ownership | Accepted | 2026-11-04 |
 | [ADR-0011](0011-concurrency-atomic-writes-rollback.md) | Concurrency, Atomic Writes, and Rollback Limitations | Accepted | 2026-11-04 |
 | [ADR-0012](0012-recovery-keys-and-revocation.md) | High-Entropy Recovery Keys, Device Revocation, and Limits | Accepted | 2026-11-04 |
+| [ADR-0013](0013-shared-vault-access-and-roles.md) | Shared Vault Access, Roles, and Grant-Based Key Distribution | Proposed | 2026-11-06 |

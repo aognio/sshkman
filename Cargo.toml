@@ -55,6 +55,7 @@ serde_json = "1.0"
 toml = "0.8"
 
 # Cryptography & Security
+x25519-dalek = { version = "3.0", features = ["static_secrets"] }
 argon2 = { version = "0.6.0", features = ["password-hash", "zeroize"] }
 chacha20poly1305 = { version = "0.11.0", features = ["alloc", "zeroize"] }
 hkdf = "0.12"

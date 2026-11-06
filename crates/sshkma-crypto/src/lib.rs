@@ -319,3 +319,117 @@ impl EnvelopeCipher {
             .map_err(|e| CryptoError::AeadError(e.to_string()))
     }
 }
+
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
+
+/// A Vault Master Key wrapped to an asymmetric recipient (grant sharing).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GrantWrappedKeyEnvelope {
+    pub version: u32,
+    pub ephemeral_public: String, // hex 32 bytes
+    pub nonce: String,            // hex 24 bytes
+    pub ciphertext: String,       // hex (ct+tag)
+}
+
+/// Generate an X25519 keypair for grant-based vault sharing.
+/// Returns (private_key_bytes, public_key_bytes).
+pub fn generate_grant_keypair() -> (Zeroizing<[u8; 32]>, [u8; 32]) {
+    use rand::RngCore;
+    let mut secret_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
+    let secret = StaticSecret::from(secret_bytes);
+    let public = X25519PublicKey::from(&secret);
+    let priv_out = Zeroizing::new(secret_bytes);
+    (priv_out, public.to_bytes())
+}
+
+/// Wrap a VMK to a recipient's X25519 public key.
+pub fn wrap_vmk_to_recipient(
+    vmk: &[u8; 32],
+    recipient_public: &[u8; 32],
+) -> Result<GrantWrappedKeyEnvelope, CryptoError> {
+    use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+    use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+    use rand::RngCore;
+
+    let mut eph_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut eph_bytes);
+    let ephemeral_secret = StaticSecret::from(eph_bytes);
+    let ephemeral_public = X25519PublicKey::from(&ephemeral_secret);
+    let recipient = X25519PublicKey::from(*recipient_public);
+    let shared = ephemeral_secret.diffie_hellman(&recipient);
+
+    let hk = Hkdf::<Sha256>::new(Some(ephemeral_public.as_bytes()), shared.as_bytes());
+    let mut key = [0u8; 32];
+    hk.expand(b"sshkma:grant:kek:v1", &mut key)
+        .map_err(|e| CryptoError::KdfError(e.to_string()))?;
+
+    let cipher = XChaCha20Poly1305::new_from_slice(&key)
+        .map_err(|e| CryptoError::AeadError(e.to_string()))?;
+    let mut nonce_bytes = [0u8; NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from(nonce_bytes);
+
+    let aad = b"sshkma:grant:vmk:v1";
+    let ct = cipher
+        .encrypt(&nonce, Payload { msg: vmk, aad })
+        .map_err(|e| CryptoError::AeadError(e.to_string()))?;
+
+    Ok(GrantWrappedKeyEnvelope {
+        version: 1,
+        ephemeral_public: hex::encode(ephemeral_public.as_bytes()),
+        nonce: hex::encode(nonce_bytes),
+        ciphertext: hex::encode(ct),
+    })
+}
+
+/// Unwrap a VMK granted via an asymmetric envelope.
+pub fn unwrap_vmk_from_grant(
+    envelope: &GrantWrappedKeyEnvelope,
+    recipient_private: &[u8; 32],
+) -> Result<Zeroizing<[u8; 32]>, CryptoError> {
+    use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+    use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+
+    let eph_bytes = hex::decode(&envelope.ephemeral_public)
+        .map_err(|e| CryptoError::InvalidEnvelope(format!("bad eph hex: {e}")))?;
+    if eph_bytes.len() != 32 {
+        return Err(CryptoError::InvalidEnvelope("bad eph length".into()));
+    }
+    let mut eph_arr = [0u8; 32];
+    eph_arr.copy_from_slice(&eph_bytes);
+    let ephemeral_public = X25519PublicKey::from(eph_arr);
+
+    let secret = StaticSecret::from(*recipient_private);
+    let shared = secret.diffie_hellman(&ephemeral_public);
+
+    let hk = Hkdf::<Sha256>::new(Some(&eph_bytes), shared.as_bytes());
+    let mut key = [0u8; 32];
+    hk.expand(b"sshkma:grant:kek:v1", &mut key)
+        .map_err(|e| CryptoError::KdfError(e.to_string()))?;
+
+    let nonce_bytes = hex::decode(&envelope.nonce)
+        .map_err(|e| CryptoError::InvalidEnvelope(format!("bad nonce hex: {e}")))?;
+    if nonce_bytes.len() != NONCE_LEN {
+        return Err(CryptoError::InvalidEnvelope("bad nonce length".into()));
+    }
+    let ct = hex::decode(&envelope.ciphertext)
+        .map_err(|e| CryptoError::InvalidEnvelope(format!("bad ct hex: {e}")))?;
+
+    let cipher = XChaCha20Poly1305::new_from_slice(&key)
+        .map_err(|e| CryptoError::AeadError(e.to_string()))?;
+    let nonce = XNonce::try_from(nonce_bytes.as_slice())
+        .map_err(|e| CryptoError::InvalidEnvelope(format!("bad nonce: {e}")))?;
+
+    let aad = b"sshkma:grant:vmk:v1";
+    let decrypted = cipher
+        .decrypt(&nonce, Payload { msg: &ct, aad })
+        .map_err(|e| CryptoError::AeadError(e.to_string()))?;
+
+    if decrypted.len() != KEY_LEN {
+        return Err(CryptoError::AeadError("invalid VMK length".into()));
+    }
+    let mut vmk = [0u8; 32];
+    vmk.copy_from_slice(&decrypted);
+    Ok(Zeroizing::new(vmk))
+}

@@ -6,6 +6,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dev-dependencies]
+secrecy = { workspace = true }
+serde_json = { workspace = true }
+
 [dependencies]
 sshkma-domain = { workspace = true }
 sshkma-events = { workspace = true }
